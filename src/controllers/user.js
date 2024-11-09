@@ -548,6 +548,13 @@ const  postForgot = async (req, res, next) => {
       if (!image) {
         throw new ApiError(400, "No image found");
       }  
+
+      const existingUser = await User.findOne({ email: req.body.email });
+      if (existingUser) {
+        // return res.status(400).json({ errors: [{ msg: 'Account with that email address already exists.' }] });
+        throw new ApiError(400, 'Account with that email address already exists.');
+      }
+
       // const contentFilePath = req.files?.image[0]?.path;
   
       // const uploadedContent = await uploadOnCloudinary(contentFilePath, {
