@@ -32,6 +32,10 @@ const postSchema =  new Schema({
     }, 
     score: {
         type: Number, 
+    }, 
+    isCompleted: {
+        type: Boolean, 
+        default: false
     }
 }, {timestamps: true});
 

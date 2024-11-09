@@ -177,6 +177,8 @@ import {
   isAuthenticated, 
   isAuthorized
 } from './config/passport.js';
+import { asyncHandler } from './utils/asyncHandler.js';
+import Post from './models/post.model.js';
 
 /**
  * Create Express server.
@@ -437,6 +439,7 @@ const callMatchImageFromTextAPI = async (req, res) => {
       const imageFilePath = req.file.filename;
       console.log("SUCK IT+++++++++++++++++++++++++++++++++++++++++",req.file);
       
+      const postId = req.body.postId;
       const text = req.body.text;
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
@@ -471,9 +474,22 @@ const callMatchImageFromTextAPI = async (req, res) => {
         //     confidence: result.confidence > 0.65 ? true : false
         // });
 
-        return {
-            confidence: result.confidence > 0.65 ? true : false
+        // return {
+        //     confidence: result.confidence > 0.65 
+        // }
+
+        if(result.confidence > 0.65) {
+          const post = Post.findById(postId);
+          post.isCompleted = true;
+          await post.save();  
         }
+
+        return {
+          success: true,
+          confidence: result.confidence > 0.65 ? true : false
+        }
+
+
     } catch (error) {
         // console.error('Error in image-text matching:', error);
         // res.status(500).json({
@@ -682,7 +698,13 @@ app.post('/recognize-and-match', upload.single('image'), async (req, res) => {
 //   }
 // }
 
-
+const commitCompleted = async(req, res) => {
+  try {
+    
+  } catch (error) {
+    
+  }
+}
 
 
 /**
