@@ -8,6 +8,8 @@ import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true },
+  name: { type: String},
+  image: String,
   password: String,
   passwordResetToken: String,
   passwordResetExpires: Date,
@@ -17,6 +19,11 @@ const userSchema = new mongoose.Schema({
   google: String,
   github: String,
   tokens: Array,
+  
+  score: {
+    type: Number, 
+    default: 0
+  },
 
   profile: {
     name: String,
@@ -24,7 +31,8 @@ const userSchema = new mongoose.Schema({
     location: String,
     website: String,
     picture: String
-  }
+  } 
+
 }, { timestamps: true });
 
 

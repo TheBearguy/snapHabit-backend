@@ -7,6 +7,7 @@ import User from '../models/user.model.js'; // Note the.js extension if necessar
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import mailChecker from 'mailchecker';
+import { uploadOnCloudinary } from '../utils/cloudinary.js';
 
 const randomBytesAsync = promisify(crypto.randomBytes);
 
@@ -529,6 +530,47 @@ const  postForgot = async (req, res, next) => {
     }
   };
   
+
+  export const postUser = async (req, res, next) => {
+    try {
+      const { name, email } = req.body;
+      console.log(req.body);
+      
+  
+      if (!name) {
+        throw new ApiError(400, "No name found");
+      }
+  
+      if (!email) {
+        throw new ApiError(400, "No email found");
+      }
+  
+      const contentFilePath = req.files?.image[0]?.path;
+  
+      const uploadedContent = await uploadOnCloudinary(contentFilePath, {
+        resource_type: "image",
+      });
+  
+      if (!uploadedContent) {
+        throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
+      }
+  
+      const user = new User({
+        name,
+        image: uploadedContent.url,
+        email,
+      });
+  
+      await user.save();
+      return res
+        .status(200)
+        .json(new ApiResponse(200, user, "User Added Successfully"));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+
   export {
     postLogin, 
     logout, 

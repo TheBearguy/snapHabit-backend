@@ -30,6 +30,9 @@ const postSchema =  new Schema({
         type: Boolean, 
         default: true
     }, 
+    score: {
+        type: Number, 
+    }
 }, {timestamps: true});
 
 postSchema.plugin(mongooseAggregatePaginate); 

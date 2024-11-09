@@ -5,9 +5,11 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import Post from '../models/post.model.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { upload } from '../middlewares/multer.middleware.js';
+import axios from 'axios';
+import { getEnvironmentalScore } from './genai.controller.js';
 
 
-// Get all posts for a specific user
+//! Get all posts for a specific user FOR PROFILE PAGE
 const allPosts = async (req, res) => {
     try {
         const { page = '1', limit = '10', sortBy, sortType, query, userId } = req.query;
@@ -18,9 +20,9 @@ const allPosts = async (req, res) => {
         }
 
         // If query is provided, check for valid search
-        if (query) {
-            throw new ApiError(400, "No Query provided");
-        }
+        // if (query) {
+        //     throw new ApiError(400, "No Query provided");
+        // }
 
         const pageNumber = parseInt(page, 10);
         const limitNumber = parseInt(limit, 10);
@@ -33,17 +35,20 @@ const allPosts = async (req, res) => {
 
         // Search criteria based on user ID and optional query (title or content search)
         const searchPost = {
-            userId: userId,
-            $or: [
-                { title: { $regex: new RegExp(query, 'i') } },
-                { content: { $regex: new RegExp(query, 'i') } },
-            ]
+            owner: userId,
+            // $or: [
+            //     { title: { $regex: new RegExp(query, 'i') } },
+            //     { content: { $regex: new RegExp(query, 'i') } },
+            // ]
         };
 
         const posts = await Post.find(searchPost)
-            .sort(sortingCriteria)
-            .skip((pageNumber - 1) * limitNumber)
-            .limit(limitNumber);
+            // .sort(sortingCriteria)
+            // .skip((pageNumber - 1) * limitNumber)
+            // .limit(limitNumber);
+        
+            console.log(posts);
+            
 
         if (!posts.length) {
             throw new ApiError(400, "No posts found or error occurred while getting posts");
@@ -90,14 +95,20 @@ const publishAPost = async (req, res) => {
             throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
         }
 
-        // Create new post
+        console.log("hello it is starting");
+        
+        const genAIAnswer = await getEnvironmentalScore(title, caption);
+        // console.log(genAIAnswer);
+        // console.log("hello, it ended");
+            // Create new post
         const post = new Post({
             title,
             content: uploadedContent.url,
             caption,
+            score: genAIAnswer,
             owner: req.user?._id, // Assign owner to the logged-in user
-        });
-
+        });        
+        
         await post.save();
 
         return res.status(200).json(new ApiResponse(200, post, "Post Uploaded Successfully"));
@@ -222,6 +233,51 @@ const toggleIsPublished = async (req, res) => {
     }
 };
 
+
+const addAPostFromExploreToUser = async (req, res) => {
+    try {
+        const {postId} = req.params; 
+        const response = await axios(`http://localhost:3000/post/${postId}`); 
+        console.log(response.data.data);
+        
+        const title = response.data.data.title; 
+        const content = response.data.data.content; 
+        const caption = response.data.data.caption;
+
+
+        if (!title) {
+            throw new ApiError(400, "No post title found to add to the profile");
+        }
+        // content is cloduinary url string
+        if (!content) {
+            throw new ApiError(400, "No post content found to add to the profile");
+        }
+
+        if (!caption) {
+            throw new ApiError(400, "No post caption found to add to the profile");
+        }
+        // Create new post
+        const post = new Post({
+            title,
+            content,
+            caption,
+            owner: req.user?._id, // Assign owner to the logged-in user
+        });
+
+        await post.save();
+
+        return res.status(200).json(new ApiResponse(200, post, "Post added to the Profile Successfully"));
+
+
+    } catch (error) {
+        throw new ApiError(500, error.message);
+    }
+}
+
+
+
+
+
 // Helper function to handle errors
 const handleError = (error, res) => {
     if (error instanceof ApiError) {
@@ -236,5 +292,6 @@ export {
     getPostById,
     updatePost,
     deletePost,
-    toggleIsPublished
+    toggleIsPublished, 
+    addAPostFromExploreToUser
 }

@@ -30,7 +30,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 
 // Google Generative AI and LangChain imports
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, TaskType } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, TaskType, SchemaType } from "@google/generative-ai";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { createRetrievalChain } from "langchain/chains/retrieval";
 import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
@@ -50,6 +50,7 @@ dotenv.config();
 
 // const Course = require('../models/course');
 import Course from '../models/course.model.js';
+
 
 async function getInference(prompt){
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
@@ -149,7 +150,7 @@ async function getRAGResponse(user_query, language){
     }
     const generationConfig = {
         maxOutputTokens: 2048,
-        temperature: 0.5,
+        temperature: 0.9,
         topP: 0.95,
         topK: 5,
     };
@@ -173,6 +174,157 @@ async function getRAGResponse(user_query, language){
     console.log(text);
     return text
 }
+
+async function getEnvironmentalScore(title, caption) {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+    const embedding_model = new GoogleGenerativeAIEmbeddings({
+      model: "embedding-001",
+      taskType: TaskType.RETRIEVAL_DOCUMENT,
+      title: "Environmental Impact Evaluation",
+      apiKey: process.env.GOOGLE_API_KEY,
+    });
+  
+    const directory = "./assets/dataset";
+    const VECTOR_STORE_PATH = `./assets/dataset/datastore.index`;
+    let vectorStore;
+  
+    if (fs.existsSync(VECTOR_STORE_PATH)) {
+      vectorStore = await FaissStore.load(VECTOR_STORE_PATH, embedding_model);
+    } else {
+      const docs = await data_loader(directory);
+      vectorStore = await FaissStore.fromDocuments(docs, embedding_model);
+      await vectorStore.save(VECTOR_STORE_PATH);
+    }
+  
+    const generationConfig = {
+      maxOutputTokens: 4, // Increased to allow for two-digit numbers
+      temperature: 0.25,   // Slightly increased to allow for more variation
+      topP: 0.8,
+      topK: 3
+    };
+  
+    const safetySettings = [
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+      },
+    ];
+  
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-pro",
+      generationConfig,
+      safetySettings,
+    });
+  
+    const context = await vectorStore.similaritySearch(`${title} ${caption}`, 3);
+    const pageContents = context.map(item => item.pageContent);
+  
+    // Enhanced prompt to encourage more nuanced scoring
+    const prompt = `As an environmental impact assessor, evaluate the following action based on its potential positive impact on the environment. Consider factors like:
+    - Immediate environmental benefit
+    - Long-term sustainability impact
+    - Ease of implementation
+    - Scale of impact
+    
+    Action Title: "${title}"
+    Action Description: "${caption}"
+    
+    Rate this on a scale of 10-98, where:
+    10-50: Negative Impact
+    40-55: Minimal impact
+    60-75: Minimal impact
+    75-80: Basic positive impact
+    81-85: Good impact
+    86-90: Very good impact
+    91-95: Excellent impact
+    96-98: Exceptional impact
+    
+    Respond with only a number between 10 and 98.`;
+  
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      
+      // Get the raw text response
+      const rawResponse = response.candidates[0].content.parts[0].text.trim();
+      
+      // Parse the response to ensure it's a valid number
+      const parsedScore = parseInt(rawResponse);
+      
+      // Validate the score is within our expected range
+      if (isNaN(parsedScore) || parsedScore < 75 || parsedScore > 98) {
+        // Calculate a default score based on the action type
+        const defaultScore = calculateDefaultScore(title, caption);
+        return defaultScore;
+      }
+      
+      return parsedScore;
+    } catch (error) {
+      console.error("Error generating score:", error);
+      // Calculate a default score if there's an error
+      return calculateDefaultScore(title, caption);
+    }
+  }
+  
+  // Helper function to calculate a default score based on action keywords
+  function calculateDefaultScore(title, caption) {
+    const combinedText = (title + " " + caption).toLowerCase();
+    
+    // Negative Impact Keywords
+    const negativeImpactKeywords = ['spit', 'dirty', 'plastic', 'garbage', 'poop', 'pollution'];
+    // High impact keywords
+    const highImpactKeywords = ['plant', 'tree', 'community', 'wildlife', 'renewable', 'sustainable'];
+    // Medium impact keywords
+    const mediumImpactKeywords = ['reusable', 'recycle', 'bike', 'compost', 'local'];
+    // Basic impact keywords
+    const basicImpactKeywords = ['unplug', 'shower', 'wake'];
+  
+    let score = 85; // Start with a middle ground score
+  
+    // Adjust score based on keywords
+    for (const keyword of negativeImpactKeywords) {
+        if (combinedText.includes(keyword)) {
+          score -= 50;
+        }
+      }
+
+    for (const keyword of highImpactKeywords) {
+      if (combinedText.includes(keyword)) {
+        score += 3;
+      }
+    }
+    
+    for (const keyword of mediumImpactKeywords) {
+      if (combinedText.includes(keyword)) {
+        score += 2;
+      }
+    }
+    
+    for (const keyword of basicImpactKeywords) {
+      if (combinedText.includes(keyword)) {
+        score += 1;
+      }
+    }
+  
+    // Ensure score stays within bounds
+    return Math.min(Math.max(score, 10), 98);
+  }
+  
+  // Usage example:
+  // const score = await getEnvironmentalScore("Plant a tree", "Plant a tree in your neighborhood to contribute to cleaner air.");
+  // console.log(score); // Will output a number between 75-98 based on the environmental impact
+  
+  // Usage example:
+  // const score = await getEnvironmentalScore("Plant a tree", "Plant a tree in your neighborhood to contribute to cleaner air.");
+  // console.log(score); // Will output a number between 1-10
+
+
+
+
 
 async function buildConversationHistory(messages) {
     let history = [];
@@ -341,4 +493,5 @@ export {
     generateAnswer,
     haveChat,
     haveChatWithRAG,
+    getEnvironmentalScore
 };

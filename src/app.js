@@ -80,7 +80,8 @@ import {
   getVerifyEmail, 
   postReset, 
   getForgot, 
-  postForgot
+  postForgot,
+  postUser
 } from './controllers/user.js';
 
 import {
@@ -112,7 +113,8 @@ import {
     getPostById,
     updatePost,
     deletePost,
-    toggleIsPublished
+    toggleIsPublished, 
+    addAPostFromExploreToUser
 } from './controllers/post.js';
 
 import {
@@ -158,6 +160,7 @@ import {
     generateAnswer,
     haveChat,
     haveChatWithRAG,
+    getEnvironmentalScore
 } from './controllers/genai.controller.js';
 
 /**
@@ -281,6 +284,13 @@ app.post('/account/profile', isAuthenticated, postUpdateProfile);
 app.post('/account/password', isAuthenticated, postUpdatePassword);
 app.post('/account/delete', isAuthenticated, postDeleteAccount);
 app.get('/account/unlink/:provider', isAuthenticated, getOauthUnlink);
+app.post('/post/user/', upload.fields([
+  {
+    name: "image", 
+    maxCount: 1
+  }
+])  ,postUser
+)
 
 
 /**
@@ -327,12 +337,13 @@ app.post("/post/create",
   ]),
   publishAPost);
 
-app.get("/post/:id", getPostById);
+app.get("/post/:postId", getPostById);
 
 app.patch("/post/update/:id", updatePost);
 
 app.delete("/post/delete/:id", deletePost);
 
+app.get("/post/:postId/add-to-profile", addAPostFromExploreToUser);
 
 //TODO: Follow Routes
 app.post("/toggle-follow/:userId", toggleSubscription);
@@ -362,6 +373,8 @@ app.delete("/course/delete/:courseId", deleteCourse);
 
 
 //TODO: GenAI Routes
+app.post("/generate", getRAGResponse); 
+app.post("/generate/score", getEnvironmentalScore);
 app.post("/generate/quiz/:id", generateVideoQuiz);
 app.post("/generate/summary/:id", generateVideoSummary);
 app.post("/generate/answer", generateAnswer); 
