@@ -533,7 +533,7 @@ const  postForgot = async (req, res, next) => {
 
   export const postUser = async (req, res, next) => {
     try {
-      const { name, email } = req.body;
+      const { name, email, image } = req.body;
       console.log(req.body);
       
   
@@ -544,20 +544,23 @@ const  postForgot = async (req, res, next) => {
       if (!email) {
         throw new ApiError(400, "No email found");
       }
+
+      if (!image) {
+        throw new ApiError(400, "No image found");
+      }  
+      // const contentFilePath = req.files?.image[0]?.path;
   
-      const contentFilePath = req.files?.image[0]?.path;
+      // const uploadedContent = await uploadOnCloudinary(contentFilePath, {
+      //   resource_type: "image",
+      // });
   
-      const uploadedContent = await uploadOnCloudinary(contentFilePath, {
-        resource_type: "image",
-      });
-  
-      if (!uploadedContent) {
-        throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
-      }
+      // if (!uploadedContent) {
+      //   throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
+      // }
   
       const user = new User({
         name,
-        image: uploadedContent.url,
+        image,
         email,
       });
   

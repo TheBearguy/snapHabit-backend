@@ -1,6 +1,7 @@
 
 .wwebjs_auth
 .wwebjs_cache
+google-cloud-visionAI-key.json
 
 # Logs
 logs

@@ -81,7 +81,8 @@ const publishAPost = async (req, res) => {
         }
 
         const contentFilePath = req.files?.content[0]?.path;
-
+        console.log(contentFilePath);
+        
         if (!contentFilePath) {
             throw new ApiError(400, "No content file found");
         }

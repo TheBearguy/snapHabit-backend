@@ -27,7 +27,13 @@ import flash from 'express-flash';
 import lusca from 'lusca';
 import {upload} from './middlewares/multer.middleware.js';
 import cors from 'cors';
-
+// Import at the top of your Express app file
+import  ImageTextMatcher  from './utils/ImageTextMatcher.js';  // Adjust path based on your structure
+import fs from 'fs';
+import {getFaceFeaturesFromBuffer,
+  getFaceFeaturesFromUrl,
+  calculateSimilarity} from './utils/faceRecognition.js';
+import FormData from 'form-data';
 /**
  * Load environment variables from .env file, where API keys and passwords are configured.
  */
@@ -380,6 +386,304 @@ app.post("/generate/summary/:id", generateVideoSummary);
 app.post("/generate/answer", generateAnswer); 
 app.post("/chat", haveChat); 
 app.post("chat/rag", haveChatWithRAG); 
+
+
+
+//TODO: VISION API
+
+
+
+// Configure multer for handling file uploads
+// const upload = multer({
+//     storage: multer.memoryStorage(),
+//     limits: {
+//         fileSize: 5 * 1024 * 1024 // 5MB limit
+//     }
+// });
+
+// Configure storage for GCP uploads
+
+// const storagegcp = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "./public/temp");
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, file.originalname);
+//   },
+// });
+
+// // Configure multer upload with file filter
+// const uploadgcp = multer({
+//   storage: storagegcp,
+//   fileFilter: function(req, file, cb) {
+//     // Accept images only
+//     if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG|gif|GIF)$/)) {
+//       req.fileValidationError = 'Only image files are allowed!';
+//       return cb(new Error('Only image files are allowed!'), false);
+//     }
+//     cb(null, true);
+//   }
+// });
+
+
+// Initialize the matcher (do this outside route handlers)
+const matcher = new ImageTextMatcher('./google-cloud-visionAI-key.json'); // Replace with your credentials path
+
+// Add this route to your Express app
+// app.post('/match-image-text', upload.single('image'), 
+const callMatchImageFromTextAPI = async (req, res) => {
+    try {
+
+      const imageFilePath = req.file.filename;
+      console.log("SUCK IT+++++++++++++++++++++++++++++++++++++++++",req.file);
+      
+      const text = req.body.text;
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        if (!req.body.text) {
+            return res.status(400).json({ error: 'No text description provided' });
+        }
+
+        // Create a temporary file from the buffer
+        // const tempImagePath = './public/temp/' + req.file.originalname;
+        const tempImagePath = './public/temp/' + imageFilePath;
+        console.log(tempImagePath);
+        
+        // await fs.promises.writeFile(tempImagePath, req.file.buffer);
+
+        // Match image and text
+        const result = await matcher.matchImageAndText(
+            tempImagePath,
+            req.body.text,
+            {
+                minConfidence: 0.7,
+                minMatches: 1,
+                requireExactMatch: false
+            }
+        );
+
+        // Clean up temporary file
+        await fs.promises.unlink(tempImagePath);
+
+        // res.json({
+        //     confidence: result.confidence > 0.65 ? true : false
+        // });
+
+        return {
+            confidence: result.confidence > 0.65 ? true : false
+        }
+    } catch (error) {
+        // console.error('Error in image-text matching:', error);
+        // res.status(500).json({
+        //     success: false,
+        //     error: 'Error processing image and text',
+        //     details: error.message
+        // });
+        return {
+          success: false,
+          error: 'Error processing image and text',
+          details: error.message
+        }
+    }
+};
+
+
+
+//TODO: User Image face recognition
+// app.post('/recognize-face', upload.single("image"), async (req, res) => {
+//   try {
+//       console.log(req.file.filename, req.body.clerkImageUrl);
+      
+//       if (!req.file.filename || !req.body.clerkImageUrl) {
+//           return res.status(400).json({
+//               error: 'Please provide both an uploaded image and a Clerk image URL'
+//           });
+//       }
+
+//       // Access the buffer from req.file
+//       // console.log(req.file.buffer);
+//       const filePath = req.file.path;
+
+//       // Read the file to get the buffer
+//       const buffer = await fs.promises.readFile(filePath);
+
+//       // Perform face recognition
+//       const faceFeatures = await getFaceFeaturesFromBuffer(buffer);
+      
+//       const imageFileFaceFeatures = await getFaceFeaturesFromBuffer(req.file.buffer);
+//       const clerkImageFaceFeatures = await getFaceFeaturesFromUrl(req.body.clerkImageUrl);
+
+//       if (!imageFileFaceFeatures || !clerkImageFaceFeatures) {
+//           return res.status(400).json({
+//               error: 'Could not detect faces in one or both images'
+//           });
+//       }
+
+//       // Calculate similarity score
+//       const similarityScore = calculateSimilarity(imageFileFaceFeatures, clerkImageFaceFeatures);
+
+//       // Define threshold for considering faces as matching
+//       const SIMILARITY_THRESHOLD = 0.6;
+//       const isMatch = similarityScore >= SIMILARITY_THRESHOLD;
+
+//       res.json({
+//           isMatch,
+//           similarityScore,
+//           confidence: (imageFileFaceFeatures.confidence + clerkImageFaceFeatures.confidence) / 2
+//       });
+//   } catch (error) {
+//       console.error('Error in face comparison:', error);
+//       res.status(500).json({
+//           error: 'Internal server error during face comparison'
+//       });
+//   }
+// });
+
+
+
+// app.post('/recognize-face', upload.single('image'), async (req, res) => {
+//   try {
+//       // Get the file path from the uploaded file
+//       const filePath = req.file.path;
+
+//       // Read the file to get the buffer
+//       const buffer = await fs.promises.readFile(filePath);
+
+//       // Perform face recognition
+//       const faceFeatures = await getFaceFeaturesFromBuffer(buffer);
+
+//       // Send the response
+//       res.json({ faceFeatures });
+
+//       // Delete the temporary file
+//       await fs.promises.unlink(filePath);
+//   } catch (error) {
+//       console.error("Error in face recognition:", error);
+//       res.status(500).send("Error processing the image.");
+//   }
+// });
+
+// app.post('/recognize-face', upload.single("image"), 
+const callFaceRecognitionAPI = async (req, res) => {
+  try {
+      if (!req.file || !req.body.clerkImageUrl) {
+          return res.status(400).json({ error: 'Please provide both an uploaded image and a Clerk image URL' });
+      }
+      console.log(req.file);
+      
+      const filePath = req.file.path;
+      const buffer = await fs.promises.readFile(filePath);
+
+      const imageFileFaceFeatures = await getFaceFeaturesFromBuffer(buffer);
+      const clerkImageFaceFeatures = await getFaceFeaturesFromUrl(req.body.clerkImageUrl);
+
+      if (!imageFileFaceFeatures || !clerkImageFaceFeatures) {
+          return res.status(400).json({ error: 'Could not detect faces in one or both images' });
+      }
+
+      const similarityScore = calculateSimilarity(imageFileFaceFeatures, clerkImageFaceFeatures);
+      const SIMILARITY_THRESHOLD = 0.6;
+      const isMatch = similarityScore >= SIMILARITY_THRESHOLD;
+
+      // res.json({
+      //     // isMatch,
+      //     // similarityScore,
+      //     confidence: ((imageFileFaceFeatures.confidence + clerkImageFaceFeatures.confidence) / 2) > 0.65 ? true : false
+      // });
+
+      return {
+        confidence: ((imageFileFaceFeatures.confidence + clerkImageFaceFeatures.confidence) / 2) > 0.65 ? true : false
+      }
+
+  } catch (error) {
+      console.error('Error in face comparison:', error);
+      // res.status(500).json({ error: 'Internal server error during face comparison' });
+      return {
+        status: 500, 
+        error: "Internal server error during face comparison"
+      }
+  }
+};
+
+
+
+app.post('/recognize-and-match', upload.single('image'), async (req, res) => {
+  try {
+    const { clerkImageUrl, text } = req.body;
+
+    // Validate inputs
+    if (!clerkImageUrl || !text || !req.file) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    // Call face recognition API first
+    const faceRecognitionResult = await callFaceRecognitionAPI(req);
+
+    // If face recognition is successful, call match image from text API
+    if (faceRecognitionResult) {
+      const matchImageResult = await callMatchImageFromTextAPI(req, text);
+      res.json({
+        faceRecognition: faceRecognitionResult,
+        matchImageText: matchImageResult,
+      });
+    } else {
+      // If face recognition fails, return a failure response
+      res.status(400).json({ error: 'Face recognition failed' });
+    }
+  } catch (error) {
+    console.error('Error in processing:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Function to call face recognition API
+// async function callFaceRecognitionAPI(req) {
+//   try {
+//     // const form = new FormData(); // Create a new form-data instance
+//     // form.append('image', req.file.buffer, {
+//     //   filename: req.file.originalname, // Set the filename properly
+//     //   contentType: req.file.mimetype, // Set the content-type based on the file
+//     // });
+//     // form.append('clerkImageUrl', req.body.clerkImageUrl); // Append the clerk image URL
+
+//     const response = await axios.post('http://localhost:3000/recognize-face', 
+//       // form, {
+//       // headers: {
+//       //   ...form.getHeaders(), // Important to include the headers generated by form-data
+//       // },
+//     // }
+//   );
+
+//     return response.data; // Assume it returns true/false
+//   } catch (error) {
+//     console.error('Error calling face recognition API:', error);
+//     return false; // Return false if the API call fails
+//   }
+// }
+
+// // Function to call match image from text API
+// async function callMatchImageFromTextAPI(req, text) {
+//   try {
+//     const formData = new FormData();
+//     formData.append('image', req.file.buffer, req.file.originalname);
+//     formData.append('text', text);
+
+//     const response = await axios.post('http://localhost:3000/match-image-text', formData, {
+//       headers: {
+//         'Content-Type': 'multipart/form-data',
+//       },
+//     });
+    
+//     return response.confidence;  // Assume it returns true/false
+//   } catch (error) {
+//     console.error('Error calling match image from text API:', error);
+//     return false;  // Return false if the API call fails
+//   }
+// }
+
+
+
 
 /**
  * Error Handler.
