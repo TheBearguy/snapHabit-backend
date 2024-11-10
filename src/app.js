@@ -698,13 +698,134 @@ app.post('/recognize-and-match', upload.single('image'), async (req, res) => {
 //   }
 // }
 
-const commitCompleted = async(req, res) => {
-  try {
-    
-  } catch (error) {
-    
-  }
+// Middleware to verify access token
+
+import fetchUserFitnessData from './utils/fetchFitnessData.js';
+
+const config = {
+  google: {
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    client_secret: process.env.GOOGLE_CLIENT_SECRET,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/auth/google/callback'
 }
+};
+
+// const { google } = require('googleapis');
+import {google} from 'googleapis';
+
+const oauth2Client = new google.auth.OAuth2(
+    config.google.client_id,
+    config.google.client_secret,
+    config.google.redirect_uri
+);
+
+const SCOPES = [
+  'https://www.googleapis.com/auth/fitness.activity.read',
+  // 'https://www.googleapis.com/auth/fitness.location.read',
+    'https://www.googleapis.com/auth/fitness.location.read',
+  'https://www.googleapis.com/auth/fitness.body.read',
+  'https://www.googleapis.com/auth/fitness.heart_rate.read',
+  'https://www.googleapis.com/auth/fitness.sleep.read'
+];
+
+app.get('/auth/google', (req, res) => {
+  const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: SCOPES,
+      prompt: 'consent'  // Force prompt to ensure we get refresh_token
+  });
+  res.redirect(authUrl);
+});
+
+
+const verifyAccessToken = (req, res, next) => {
+  const accessToken = req.headers.authorization?.split('Bearer ')[1];
+  if (!accessToken) {
+    return res.status(401).json({ error: 'Access token is required' });
+  }
+  req.accessToken = accessToken;
+  next();
+};
+
+import GoogleFitDataFetcher from './utils/GoogleFitDataFetcher.js';
+
+// In your route handler
+app.get('/api/fitness/test', verifyAccessToken, async (req, res) => {
+  try {
+    const result = await testGoogleFitAPI(req.accessToken);
+    res.json(result);
+  } catch (error) {
+    console.error('Test failed:', error);
+    res.status(500).json({
+      error: 'Failed to test Google Fit API',
+      details: error.message
+    });
+  }
+});
+
+// Your existing route
+app.get('/api/fitness/:metric', verifyAccessToken, async (req, res) => {
+  try {
+    const { metric } = req.params;
+    const { days = 7 } = req.query;
+    const fitDataFetcher = new GoogleFitDataFetcher(req.accessToken);
+    
+    const end = Date.now();
+    const start = end - (parseInt(days) * 24 * 60 * 60 * 1000);
+    
+    let data;
+    switch(metric) {
+      case 'steps':
+        data = await fitDataFetcher.getStepsData(start, end);
+        break;
+      case 'activities':
+        data = await fitDataFetcher.getActivityData(start, end);
+        break;
+      case 'calories':
+        data = await fitDataFetcher.getCaloriesData(start, end);
+        break;
+      case 'heart-rate':
+        data = await fitDataFetcher.getHeartRateData(start, end);
+        break;
+      case 'sleep':
+        data = await fitDataFetcher.getSleepData(start, end);
+        break;
+      case 'location':
+        data = await fitDataFetcher.getLocationData(start, end);
+        break;
+      default:
+        return res.status(400).json({
+          error: 'Invalid metric requested',
+          validMetrics: ['steps', 'activities', 'calories', 'heart-rate', 'sleep', 'location']
+        });
+    }
+    
+    if (!data || Object.values(data)[0].length === 0) {
+      return res.status(404).json({
+        error: 'No data available',
+        message: `No ${metric} data found for the specified time range`,
+        timeRange: { start: new Date(start), end: new Date(end) }
+      });
+    }
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching fitness data:', error);
+    
+    if (error.message.includes('PERMISSION_DENIED')) {
+      return res.status(403).json({
+        error: 'Permission denied',
+        message: `Please ensure you have granted permission to access ${req.params.metric} data`,
+        details: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to fetch fitness data',
+      details: error.message
+    });
+  }
+});
 
 
 /**
