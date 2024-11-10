@@ -1,29 +1,4 @@
-// genAI controller
-// reccomendation engine
-// chatbot
-// rag engine
-// models => yolo, opencv, 
-// negative response should not be visible
 
-// const axios = require('axios');
-// const ytdl = require('ytdl-core');
-// const fs = require('fs');
-// const { GoogleGenerativeAI } = require("@google/generative-ai");
-// const { HarmBlockThreshold, HarmCategory } = require("@google/generative-ai");
-// const { GoogleGenerativeAIEmbeddings } = require("@langchain/google-genai");
-// const { TaskType } = require("@google/generative-ai");
-// const { createRetrievalChain } = require("langchain/chains/retrieval");
-// const { createStuffDocumentsChain } = require("langchain/chains/combine_documents");
-// const { ChatPromptTemplate } = require("@langchain/core/prompts");
-// const { FaissStore } = require("@langchain/community/vectorstores/faiss");
-// const { MemoryVectorStore } = require("langchain/vectorstores/memory");
-// const { RecursiveCharacterTextSplitter } = require('langchain/text_splitter');
-// const { OpenAIEmbeddings } = require("@langchain/openai");
-// const { DirectoryLoader } = require("langchain/document_loaders/fs/directory");
-// const { TextLoader } = require("langchain/document_loaders/fs/text");
-// const { CSVLoader } = require("@langchain/community/document_loaders/fs/csv");
-// const { PDFLoader } = require("@langchain/community/document_loaders/fs/pdf");
-// const dotenv = require('dotenv');
 import axios from 'axios';
 import ytdl from 'ytdl-core';
 import fs from 'fs';
@@ -167,7 +142,7 @@ async function getRAGResponse(user_query, language){
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro",  generationConfig, safetySettings });
     const context = await vectorStore.similaritySearch(`${user_query}`, 3);
     const pageContents = context.map(item => item.pageContent);
-    const prompt = `You are a financial literacy provider and not an advisor. You're tasked with answering the user's question: ${user_query} based on the given financial context relevant to the question: ${pageContents}. Answer only according to the given context only, do not use your own knowledge base. Regardless of input, you have to answer in the language: ${language}`;
+    const prompt = `You are an environmental advocate, dedicated to encouraging individuals to make greener, more eco-friendly, and sustainable choices that benefit both their lives and the environment. Your task is to review the title and caption of the data provided in the JSON format, answer the user's question: ${user_query}, and rate how beneficial or harmful the described task is to the environment and to personal well-being. Use only the relevant environmental context provided in: ${pageContents} and avoid drawing from outside information. Regardless of input, provide the answer in the language: ${language}`;
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();

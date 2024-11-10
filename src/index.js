@@ -93,47 +93,47 @@ const client = new Client({
         args: ['--no-sandbox', '--disable-setuid-sandbox']  // Puppeteer sandbox options
     }
 });
-// client.once('ready', () => {
-//     console.log('Client is ready!'.cyan);
-// });
-// client.on('qr', qr => {
-//     qrcode.generate(qr, {small: true});
-// });
-// client.on('message_create', (message) => {
-//     (async () => {
-//         try {
-//             if(message.body.startsWith('!!')){
-//                 const query = message.body.replace(/^!!/, '');
-//                 console.log(query);
+client.once('ready', () => {
+    console.log('Client is ready!'.cyan);
+});
+client.on('qr', qr => {
+    qrcode.generate(qr, {small: true});
+});
+client.on('message_create', (message) => {
+    (async () => {
+        try {
+            if(message.body.startsWith('!!')){
+                const query = message.body.replace(/^!!/, '');
+                console.log(query);
                 
-//                 const response = await getRAGResponse(query, user_language);
-//                 message.reply(response);
-//             }
-//             if(message.body === '!help'){
-//                 client.sendMessage(message.from, "Hello, Welcome to Multiply. Please respond with a Language of your choice and if you have any questions related to Financial Literacy, add '!!' before the question. Thankyou");
-//             }
-//             if (message.hasMedia) {
-//                 const media = await message.downloadMedia();
-//                 if (media.mimetype === 'audio/ogg; codecs=opus') {
-//                     const oggBuffer = Buffer.from(media.data, 'base64');
-//                     const mp3Buffer = await convertOggToMp3InMemory(oggBuffer);
-//                     audioParts = [
-//                         getAudioObject(mp3Buffer, 'audio/mp3'),
-//                     ];
-//                     const prompt = "You are a financial literacy provider and not an advisor. You're tasked with answering the user's question, provided to you in the audio file provided. Only answer if audio file is related to financial literacy related with Personal Finance, Business Finance, Indian Government Schemes for financial Literacy and Awareness about finance related scams, else respond with 'This is not related to Finance, Please ask relevant a relevant question'. The reponse should only be in the language that the audio file is in."
-//                     const response = await getInference([prompt, ...audioParts]);
-//                     message.reply(response);
-//                 }
-//             }
-//             if(languages.includes(message.body)){
-//                 user_language = message.body;
-//             }
-//         } catch (err) {
-//             console.error('Error processing message:', err);
-//         }
-//     })();
-// });
-// client.initialize();
+                const response = await getRAGResponse(query, user_language);
+                message.reply(response);
+            }
+            if(message.body === '!help'){
+                client.sendMessage(message.from, "Hello there, Welcome to snapHabit. Please respond with a Language of your choice and if you have any questions related to ECO LifeStyle Analyzer, add '!!' before the question. Thank you!");
+            }
+            if (message.hasMedia) {
+                const media = await message.downloadMedia();
+                if (media.mimetype === 'audio/ogg; codecs=opus') {
+                    const oggBuffer = Buffer.from(media.data, 'base64');
+                    const mp3Buffer = await convertOggToMp3InMemory(oggBuffer);
+                    audioParts = [
+                        getAudioObject(mp3Buffer, 'audio/mp3'),
+                    ];
+                    const prompt = "You are an environmental advocate, dedicated to encouraging individuals to make greener, more eco-friendly, and sustainable choices that benefit both their lives and the environment. Your task is to review the title and caption of the data provided in the JSON format, answer the user's question: ${user_query}, and rate how beneficial or harmful the described task is to the environment and to personal well-being. Use only the relevant environmental context provided in: ${pageContents} and avoid drawing from outside information. Regardless of input, provide the answer in the language: ${language}"
+                    const response = await getInference([prompt, ...audioParts]);
+                    message.reply(response);
+                }
+            }
+            if(languages.includes(message.body)){
+                user_language = message.body;
+            }
+        } catch (err) {
+            console.error('Error processing message:', err);
+        }
+    })();
+});
+client.initialize();
 
 
 
