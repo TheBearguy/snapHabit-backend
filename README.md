@@ -30,19 +30,3 @@ In addition to the core app, we have developed a **browser extension** that sugg
 - **Messaging**: WhatsApp API for RAG (Recommendation and Advice Generation) Engine
 
 ---
-## Installation
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/yourusername/snapHabit.git
-   cd snapHabit
-2. Install Dependencies:
-
-```npm install
-  Configure Environment Variables: Set up your .env file with the following keys:
-  
-      CORS_ORIGIN
-      DATABASE_URL
-      GOOGLE_FIT_API_KEY
-      WHATSAPP_API_KEY
-      Other API keys as required
