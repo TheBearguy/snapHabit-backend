@@ -51,7 +51,7 @@ const allPosts = async (req, res) => {
             
 
         if (!posts.length) {
-            throw new ApiError(400, "No posts found or error occurred while getting posts");
+            return res.status(200).json(new ApiResponse(200, [], "No posts found"));
         }
 
         return res.status(200).json(new ApiResponse(200, posts, "All Posts Fetched Successfully"));
@@ -66,53 +66,81 @@ const allPosts = async (req, res) => {
 };
 // Publish a new post
 const publishAPost = async (req, res) => {
-        const { title, caption } = req.body;
+    const { title, caption } = req.body;
 
-        if (!title) {
-            throw new ApiError(400, "No post title found");
+    console.log(req.files);
+    if (!title) {
+        throw new ApiError(400, 'No post title found');
+    }
+
+    // if (!content) {
+    //     throw new ApiError(400, "No post content found");
+    // }
+
+    if (!caption) {
+        throw new ApiError(400, 'No post caption found');
+    }
+
+    const contentFilePath = req.files?.content[0]?.path;
+    console.log(contentFilePath);
+
+    if (!contentFilePath) {
+        throw new ApiError(400, 'No content file found');
+    }
+
+    // Upload content to Cloudinary
+    const uploadedContent = await uploadOnCloudinary(contentFilePath, {
+        resource_type: 'image',
+    });
+
+    if (!uploadedContent) {
+        throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
+    }
+
+    console.log('hello it is starting');
+    const genAIAnswer = await getEnvironmentalScore(title, caption);
+
+    // Create new post
+    const post = new Post({
+        title,
+        content: uploadedContent.url,
+        caption,
+        score: genAIAnswer,
+        owner: req.query.userId, // Assign owner to the logged-in user
+    });
+
+    await post.save();
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, post, 'Post Uploaded Successfully'));
+};
+
+// Commit a ritual
+export const addCommit = async (req, res) => {
+    try {
+        console.log(req.body);
+        const { title, caption, content, score } = req.body;
+
+        if (!title || !caption || !content || !score) {
+            throw new ApiError(400, 'Please provide all fields');
         }
 
-        // if (!content) {
-        //     throw new ApiError(400, "No post content found");
-        // }
-
-        if (!caption) {
-            throw new ApiError(400, "No post caption found");
-        }
-
-        const contentFilePath = req.files?.content[0]?.path;
-        console.log(contentFilePath);
-        
-        if (!contentFilePath) {
-            throw new ApiError(400, "No content file found");
-        }
-
-        // Upload content to Cloudinary
-        const uploadedContent = await uploadOnCloudinary(contentFilePath, {
-            resource_type: "image",
-        });
-
-        if (!uploadedContent) {
-            throw new ApiError(401, "Content couldn't be uploaded to Cloudinary");
-        }
-
-        console.log("hello it is starting");
-        
-        const genAIAnswer = await getEnvironmentalScore(title, caption);
-        // console.log(genAIAnswer);
-        // console.log("hello, it ended");
-            // Create new post
         const post = new Post({
             title,
-            content: uploadedContent.url,
             caption,
-            score: genAIAnswer,
-            owner: req.user?._id, // Assign owner to the logged-in user
-        });        
-        
-        await post.save();
+            content,
+            owner: req.query.userId,
+            score: score,
+        });
 
-        return res.status(200).json(new ApiResponse(200, post, "Post Uploaded Successfully"));
+        await post.save();
+        return res
+            .status(201)
+            .json(new ApiResponse(201, post, 'Post Added Successfully'));
+    } catch (err) {
+        throw new ApiError(400, 'An error occurred', err);
+    }
 };
 
 // Get a post by its ID

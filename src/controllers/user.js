@@ -8,6 +8,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import mailChecker from 'mailchecker';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import Post from '../models/post.model.js';
 
 const randomBytesAsync = promisify(crypto.randomBytes);
 
@@ -551,8 +552,9 @@ const  postForgot = async (req, res, next) => {
 
       const existingUser = await User.findOne({ email: req.body.email });
       if (existingUser) {
-        // return res.status(400).json({ errors: [{ msg: 'Account with that email address already exists.' }] });
-        throw new ApiError(400, 'Account with that email address already exists.');
+        return res
+        .status(200)
+        .json(new ApiResponse(200, { user: existingUser }, "User Already Exists"));
       }
 
       // const contentFilePath = req.files?.image[0]?.path;
@@ -577,6 +579,68 @@ const  postForgot = async (req, res, next) => {
         .json(new ApiResponse(200, user, "User Added Successfully"));
     } catch (err) {
       next(err);
+    }
+  };
+
+  export const getUser = async (req, res) => {
+    try {
+      const user = await User.findOne({ email: req.query.email });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      return res.status(200).json(new ApiResponse(200, user, "User found"));
+    } catch (err) {
+      throw new ApiError(404, "An error occurred");
+    }
+  };
+
+  export const calculateStreak = async (req, res) => {
+    const { userId } = req.query;
+
+    if (!userId) {
+      throw new ApiError(400, "No user ID found");
+    }
+    
+    try {
+        // Fetch user’s commits from the database
+        const userCommits = await Post.find({ owner: userId }).sort({ whenCompleted: -1 });
+  
+        if (!userCommits.length) return 0; // No commits, streak is 0
+  
+        let streak = 1; // Start with a streak of 1 for the most recent completion
+        let previousDate = new Date(userCommits[0].whenCompleted);
+  
+        for (let i = 1; i < userCommits.length; i++) {
+            const currentDate = new Date(userCommits[i].whenCompleted);
+  
+            // Calculate the difference in days
+            const differenceInTime = previousDate - currentDate;
+            const differenceInDays = differenceInTime / (1000 * 3600 * 24);
+  
+            if (differenceInDays === 1) {
+                // Increment streak if dates are consecutive
+                streak++;
+                previousDate = currentDate; // Move to the next day in the streak
+            } else if (differenceInDays > 1) {
+                // Break the streak if the dates are not consecutive
+                break;
+            }
+        }
+  
+        return res.status(200).json(new ApiResponse(200, { streak }, "Streak calculated successfully"));
+    } catch (error) {
+        console.error("Error calculating streak:", error);
+        return 0; // Default streak value if an error occurs
+    }
+  };
+
+  //TODO: Get All Users
+  export const  getAllUsers =async (req, res, next) => {
+    try {
+        const users=await User.find({})
+        return res.status(200).json( new ApiResponse(200, users, "All Users") );
+    } catch (error) {
+      throw new ApiError(401, error);
     }
   };
 

@@ -45,12 +45,12 @@ dotenv.config({ path: '.env.example' });
 // const secureTransfer = (process.env.BASE_URL.startsWith('https'));
 
 // Consider adding a proxy such as cloudflare for production.
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+//   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+//   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+// });
 
 // This logic for numberOfProxies works for local testing, ngrok use, single host deployments
 // behind cloudflare, etc. You may need to change it for more complex network settings.
@@ -87,7 +87,10 @@ import {
   postReset, 
   getForgot, 
   postForgot,
-  postUser
+  postUser,
+  getUser,
+  calculateStreak,
+  getAllUsers
 } from './controllers/user.js';
 
 import {
@@ -120,7 +123,8 @@ import {
     updatePost,
     deletePost,
     toggleIsPublished, 
-    addAPostFromExploreToUser
+    addAPostFromExploreToUser,
+    addCommit
 } from './controllers/post.js';
 
 import {
@@ -179,6 +183,8 @@ import {
 } from './config/passport.js';
 import { asyncHandler } from './utils/asyncHandler.js';
 import Post from './models/post.model.js';
+import { getUserIdByEmail } from './middlewares/user.middleware.js';
+import User from './models/user.model.js';
 
 /**
  * Create Express server.
@@ -193,7 +199,7 @@ const corsOptions = {
   credentials: true, // Allow cookies to be sent with the requests
 };
 
-app.use(cors(corsOptions));
+app.use(cors());
 /**
  * Connect to MongoDB.
  */
@@ -215,7 +221,7 @@ app.use(compression());
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(limiter);  // Apply rate limiting
+// app.use(limiter);  // Apply rate limiting
 
 // Session configuration
 app.use(session({
@@ -292,13 +298,10 @@ app.post('/account/profile', isAuthenticated, postUpdateProfile);
 app.post('/account/password', isAuthenticated, postUpdatePassword);
 app.post('/account/delete', isAuthenticated, postDeleteAccount);
 app.get('/account/unlink/:provider', isAuthenticated, getOauthUnlink);
-app.post('/post/user/', upload.fields([
-  {
-    name: "image", 
-    maxCount: 1
-  }
-])  ,postUser
-)
+app.post('/post/user/', postUser);
+app.get('/user/get', getUser);
+app.get('/user/all', getAllUsers);
+app.get('/user/streak', getUserIdByEmail, calculateStreak);
 
 
 /**
@@ -335,17 +338,17 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
 //TODO: Post Routes
 console.log(allPosts);
 
-app.get('/post/allPosts', allPosts);
+app.get('/post/allPosts', getUserIdByEmail, allPosts);
 app.post("/post/create", 
   upload.fields([
     {
       name: "content",
       maxCount: 1
     }
-  ]),
-  publishAPost);
+  ]), getUserIdByEmail, publishAPost);
 
 app.get("/post/:postId", getPostById);
+app.post('/post/commit', getUserIdByEmail, addCommit);
 
 app.patch("/post/update/:id", updatePost);
 
@@ -354,9 +357,9 @@ app.delete("/post/delete/:id", deletePost);
 app.get("/post/:postId/add-to-profile", addAPostFromExploreToUser);
 
 //TODO: Follow Routes
-app.post("/toggle-follow/:userId", toggleSubscription);
-app.get("/followers/:userId", getChannelSubscribers);
-app.get("/following/:userId", getSubscribedChannels);
+app.post("/toggle-follow/:followId", getUserIdByEmail, toggleSubscription);
+app.get("/followers", getUserIdByEmail, getChannelSubscribers);
+app.get("/following", getUserIdByEmail, getSubscribedChannels);
 
 
 //TODO: Like Routes
@@ -438,7 +441,8 @@ const callMatchImageFromTextAPI = async (req, res) => {
 
       const imageFilePath = req.file.filename;
       console.log("SUCK IT+++++++++++++++++++++++++++++++++++++++++",req.file);
-      
+      console.log("Body", req.body);
+
       const postId = req.body.postId;
       const text = req.body.text;
         if (!req.file) {
@@ -479,14 +483,19 @@ const callMatchImageFromTextAPI = async (req, res) => {
         // }
 
         if(result.confidence > 0.65) {
-          const post = Post.findById(postId);
+          const post = await Post.findById(postId);
           post.isCompleted = true;
           await post.save();  
+
+          const user = await User.findById(post.owner);
+          user.score += post.score;
+          await user.save();
         }
 
+        console.log("Match image result", result.confidence);
         return {
           success: true,
-          confidence: result.confidence > 0.65 ? true : false
+          confidence: result.confidence > 0.8 ? true : false
         }
 
 
@@ -628,23 +637,26 @@ const callFaceRecognitionAPI = async (req, res) => {
 app.post('/recognize-and-match', upload.single('image'), async (req, res) => {
   try {
     const { clerkImageUrl, text } = req.body;
-
+    console.log(req.body);
     // Validate inputs
+    console.log(clerkImageUrl, text, req.file);
     if (!clerkImageUrl || !text || !req.file) {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
     // Call face recognition API first
     const faceRecognitionResult = await callFaceRecognitionAPI(req);
-
+    console.log("Face recognition result", faceRecognitionResult);
     // If face recognition is successful, call match image from text API
     if (faceRecognitionResult) {
       const matchImageResult = await callMatchImageFromTextAPI(req, text);
+      console.log("Match image result", matchImageResult);
       res.json({
         faceRecognition: faceRecognitionResult,
         matchImageText: matchImageResult,
       });
     } else {
       // If face recognition fails, return a failure response
+      console.log("Face recognition failed");
       res.status(400).json({ error: 'Face recognition failed' });
     }
   } catch (error) {
@@ -698,7 +710,14 @@ app.post('/recognize-and-match', upload.single('image'), async (req, res) => {
 //   }
 // }
 
-// Middleware to verify access token
+const commitCompleted = async(req, res) => {
+  try {
+    
+  } catch (error) {
+    
+  }
+}
+
 
 import fetchUserFitnessData from './utils/fetchFitnessData.js';
 
@@ -826,6 +845,7 @@ app.get('/api/fitness/:metric', verifyAccessToken, async (req, res) => {
     });
   }
 });
+
 
 
 /**
